@@ -10,9 +10,20 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            artifact_name: csv-to-links.exe
+            asset_name: csv-to-links-windows.exe
+          - os: ubuntu-latest
+            artifact_name: csv-to-links
+            asset_name: csv-to-links-linux
+          - os: macos-latest
+            artifact_name: csv-to-links.app
+            asset_name: csv-to-links-macos.app
     runs-on: ${{ matrix.os }}
+    
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -53,30 +64,25 @@ jobs:
           fi
         shell: bash
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v2
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: csv-to-links-${{ matrix.os }}
-          path: |
-            csv-to-links*
-            *.app
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.artifact_name }}
+          retention-days: 1
 
   release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v2
-
-      - name: Display structure of downloaded files
-        run: ls -R
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            csv-to-links-windows-latest/csv-to-links.exe
-            csv-to-links-ubuntu-latest/csv-to-links
-            csv-to-links-macos-latest/*.app
+            */csv-to-links*
           draft: false
           prerelease: false
         env:
