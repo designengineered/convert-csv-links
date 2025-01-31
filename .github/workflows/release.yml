@@ -8,18 +8,22 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
         include:
-          - os: windows-latest
-            artifact_name: csv-to-links.exe
-            asset_name: csv-to-links-windows.exe
-          - os: ubuntu-latest
-            artifact_name: csv-to-links
-            asset_name: csv-to-links-linux
+          # macOS first
           - os: macos-latest
             artifact_name: csv-to-links.app
             asset_name: csv-to-links-macos.app
+          # Linux second
+          - os: ubuntu-latest
+            artifact_name: csv-to-links
+            asset_name: csv-to-links-linux
+          # Windows last
+          - os: windows-latest
+            artifact_name: csv-to-links.exe
+            asset_name: csv-to-links-windows.exe
+            msystem: MINGW64
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -30,12 +34,11 @@ jobs:
         with:
           go-version: '1.21'
 
-      # Windows-specific setup
-      - name: Set up MinGW (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x64
+      # macOS-specific setup
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gcc
 
       # Linux-specific setup
       - name: Install dependencies (Linux)
@@ -44,20 +47,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
 
-      # macOS-specific setup
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install gcc
+      # Windows-specific setup
+      - name: Setup MSYS2 (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-golang
+            mingw-w64-x86_64-cairo
+            mingw-w64-x86_64-gcc-libs
+            base-devel
 
       - name: Install Fyne
         run: go install fyne.io/fyne/v2/cmd/fyne@latest
 
-      - name: Build
+      - name: Build Windows
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            fyne package -os windows -icon icon.png -name csv-to-links
-          elif [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          export PATH="/mingw64/bin:$PATH"
+          fyne package -os windows -icon icon.png -name csv-to-links
+
+      - name: Build Linux/macOS
+        if: matrix.os != 'windows-latest'
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
             fyne package -os linux -icon icon.png -name csv-to-links
           else
             fyne package -os darwin -icon icon.png -name csv-to-links
